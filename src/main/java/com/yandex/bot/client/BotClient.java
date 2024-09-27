@@ -1,20 +1,72 @@
 package com.yandex.bot.client;
 
-import com.yandex.bot.entity.TextMessage;
-import com.yandex.bot.entity.Updates;
-import feign.Headers;
-import feign.RequestLine;
-import org.springframework.cloud.openfeign.FeignClient;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestMethod;
+import com.yandex.bot.entity.*;
+import jakarta.annotation.PostConstruct;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.MediaType;
+import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.RestClient;
 
-@FeignClient(value = "bot-client", url= "https://botapi.messenger.yandex.net/bot/v1")
-//@Headers("Authorization: OAuth y0_AgAAAAB3SFZbAATIlgAAAAEKDSe-AABnQ4jdfHZDr7xwnny_5zLNWUXR3A")
-public interface BotClient {
+@Slf4j
+@Component
+public class BotClient {
+    @Value("${bot.token}")
+    private String token;
 
-    @RequestMapping(method = RequestMethod.POST, value = "/messages/sendText/", produces = "application/json")
-    //@Headers("Authorization: OAuth y0_AgAAAAB3SFZbAATIlgAAAAEKDSe-AABnQ4jdfHZDr7xwnny_5zLNWUXR3A")
-    //@RequestLine("POST /messages/sendText/")
-    void sendText(@RequestHeader("Authorization") String token, TextMessage message);
+    private RestClient restClient;
+
+    @PostConstruct
+    public void init() {
+        restClient = RestClient.builder()
+                .baseUrl("https://botapi.messenger.yandex.net/bot/v1")
+                .defaultHeaders(httpHeaders -> httpHeaders.set("Authorization", "OAuth " + token)).build();
+    }
+
+    public long sendText(String text, Update update) {
+        Message message = new Message();
+        message.setText(text);
+        return sendMessage(message, update);
+    }
+
+    public long sendButtons(String text, Button[] buttons, Update update) {
+        Message message = new Message();
+        message.setText(text);
+        message.setInline_keyboard(buttons);
+        return sendMessage(message, update);
+    }
+
+    private long sendMessage(Message message, Update update) {
+        MessageResponse response;
+        if (update.getChat().getType().equals(Chat.GROUP)) {
+            message.setChat_id(update.getChat().getId());
+        } else {
+            message.setLogin(update.getFrom().getLogin());
+        }
+        try {
+            response = restClient.post()
+                    .uri("/messages/sendText/")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(message)
+                    .retrieve()
+                    .body(MessageResponse.class);
+        } catch (HttpClientErrorException e) {
+            response = new MessageResponse();
+            response.setCode(e.getStatusCode().toString());
+            response.setOk(false);
+            response.setDescription(e.getResponseBodyAsString());
+            response.setMessage_id(0);
+        }
+
+        assert response != null;
+        if (response.isOk()) {
+            log.info("Message send success: {}", response.getMessage_id());
+        } else {
+            log.error("Message send error: {} {} ", response.getCode(), response.getDescription());
+        }
+
+        return response.getMessage_id();
+    }
 }
+

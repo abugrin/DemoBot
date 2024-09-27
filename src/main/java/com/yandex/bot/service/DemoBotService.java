@@ -1,60 +1,48 @@
 package com.yandex.bot.service;
 
-import com.yandex.bot.client.BotClient;
-import com.yandex.bot.entity.TextMessage;
+import com.yandex.bot.entity.Handler;
 import com.yandex.bot.entity.Update;
 import com.yandex.bot.entity.Updates;
-import com.yandex.bot.example.UpdateHandlers;
+import jakarta.annotation.PostConstruct;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.BeansException;
+import org.springframework.beans.factory.NoSuchBeanDefinitionException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Service;
 
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
-import java.lang.reflect.Method;
+import java.util.HashMap;
+import java.util.Map;
 
+@Slf4j
 @Service
 public class DemoBotService {
-    //private BotClient botClient;
-    private UpdateHandlers updateHandlers;
-    private MethodHandle sendTextMH;
+    private final Map<String, Handler> handlers = new HashMap<>();
+
+    private ApplicationContext applicationContext;
 
     @Autowired
-    /*public void setBotClient(BotClient botClient) {
-        this.botClient = botClient;
-    }*/
-    public void setBotUpdateHandlers(UpdateHandlers updateHandlers) {
-        this.updateHandlers = updateHandlers;
+    public void setApplicationContext(ApplicationContext applicationContext) {
+        this.applicationContext = applicationContext;
     }
 
-    public DemoBotService() {
-        MethodHandles.Lookup lookup = MethodHandles.lookup();
-        try {
-            Method sendTextMethod = UpdateHandlers.class.getDeclaredMethod("onText", Update.class);
-            sendTextMethod.setAccessible(true);
+    @PostConstruct
+    public void init() {
 
-            sendTextMH = lookup.unreflect(sendTextMethod);
-        } catch (NoSuchMethodException e) {
-            e.printStackTrace();
-        } catch (IllegalAccessException e) {
-            throw new RuntimeException(e);
+        try {
+            handlers.put("text", (Handler) applicationContext.getBean("text"));
+            handlers.put("button", (Handler) applicationContext.getBean("button"));
+        } catch (NoSuchBeanDefinitionException e) {
+            log.error("No handler found for: {}", e.getMessage());
         }
     }
 
     public void onUpdates(Updates updates) {
-        try {
-            sendTextMH.invoke("onText", updates.getUpdates().getFirst());
-        } catch (Throwable e) {
-            throw new RuntimeException(e);
+        for (Update update : updates.getUpdates()) {
+            Handler handler = handlers.get("text");
+            log.info("Update {}", update.getUpdate_id());
+            handler.handle(update);
         }
-        /*
-        TextMessage message = new TextMessage();
-        message.setLogin("abugrin@myandex360.ru");
-        message.setText("Hello!");
-        String token = "OAuth y0_AgAAAAB4-MyuAATIlgAAAAESLd6DAABVBlsyG1FMFI8kZLoZeP7NSXAzLw";
-        botClient.sendText(token, message);
-        */
     }
-
-
 
 }

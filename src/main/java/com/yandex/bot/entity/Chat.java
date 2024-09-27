@@ -8,6 +8,10 @@ import lombok.Setter;
 @Getter
 @Setter
 public class Chat {
+    public static final String GROUP = "group";
+    public static final String PRIVATE = "private";
+
     private String type;
     private String id;
+
 }

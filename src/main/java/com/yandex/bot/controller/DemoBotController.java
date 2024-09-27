@@ -29,9 +29,7 @@ public class DemoBotController  {
 
     @PostMapping(value = "/api/bot")
     public ResponseEntity<String> onUpdates(@RequestBody Updates updates) throws JsonProcessingException {
-        log.info("Request: " + mapper.writeValueAsString(updates));
-
-        log.info("CallBack: " + updates.getUpdates().getFirst().getCallback_data().get("cmd"));
+        log.info("Request: {}", mapper.writeValueAsString(updates));
         demoBotService.onUpdates(updates);
         return new ResponseEntity<>(HttpStatus.OK);
     }
